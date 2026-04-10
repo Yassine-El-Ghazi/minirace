@@ -97,7 +97,7 @@ The admin panel lets you:
 | GET | `/api/challenge` | Current mining challenge (includes live difficulty & reward) |
 | POST | `/api/transaction` | Submit a signed transaction |
 | POST | `/api/submitBlock` | Submit a mined block |
-| POST | `/api/chat` | Query the AI agent |
+| POST | `/api/chat` | Query the AI agent (tool-calling) |
 
 ### Admin endpoints (Basic Auth required)
 
@@ -144,6 +144,30 @@ node test-step8.js   # Frontend assets
 node test-step9.js   # AI Agent
 node test-step10.js  # Docker files
 ```
+
+## AI Agent
+
+The chat endpoint uses **tool calling** — the model doesn't read a wall of text, it calls functions to look up exactly what it needs.
+
+Available tools the model can invoke:
+
+| Tool | What it returns |
+|------|----------------|
+| `get_balance(address)` | Exact confirmed balance for an address |
+| `get_transactions(address)` | Last 50 transactions sent or received by an address |
+| `get_block(index)` | Full block data by index |
+| `get_stats()` | Mining leaderboard sorted by blocks mined |
+| `get_chain_info()` | Height, difficulty, reward, mempool size, latest hash |
+| `get_mempool()` | All pending unconfirmed transactions |
+
+The server runs an agentic loop — the model can call multiple tools per question before giving a final answer. No hallucination on structured data like balances or transaction history because the data is fetched directly from the blockchain, not inferred from text.
+
+Example questions:
+- "What is the balance of address 04fb59…?"
+- "Show me the transactions for address 04ab12…"
+- "Who has mined the most blocks?"
+- "How many blocks are in the chain?"
+- "Are there any pending transactions?"
 
 ## Mining Flow
 
