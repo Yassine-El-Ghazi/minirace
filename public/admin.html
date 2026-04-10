@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MineRace – Admin</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+<header>
+  <h1>Mine<span>Race</span> <span style="color:var(--yellow);font-size:0.9rem;font-weight:400">Admin</span></h1>
+  <div id="server-status" class="valid">Server: Online</div>
+  <a href="/" class="admin-link">Miner UI</a>
+</header>
+
+<div id="admin-layout">
+
+  <!-- ── Left column ──────────────────────────────────────────────────── -->
+  <div id="admin-left">
+
+    <!-- Config -->
+    <div class="panel">
+      <h2>Server Config</h2>
+
+      <div class="config-row">
+        <label>Difficulty</label>
+        <input type="number" id="cfg-difficulty" min="1" />
+        <button class="btn btn-primary" id="btn-difficulty">Apply</button>
+      </div>
+      <div id="msg-difficulty" class="cfg-msg"></div>
+
+      <div class="config-row" style="margin-top:10px">
+        <label>Mining Reward</label>
+        <input type="number" id="cfg-reward" min="0.01" step="any" />
+        <button class="btn btn-primary" id="btn-reward">Apply</button>
+      </div>
+      <div id="msg-reward" class="cfg-msg"></div>
+    </div>
+
+    <!-- Chain overview -->
+    <div class="panel">
+      <h2>Chain</h2>
+      <table class="info-table">
+        <tbody>
+          <tr><td>Height</td><td id="s-height">–</td></tr>
+          <tr><td>Latest hash</td><td id="s-hash" style="font-family:monospace;font-size:0.72rem;word-break:break-all">–</td></tr>
+          <tr><td>Mempool</td><td id="s-mempool">–</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bots -->
+    <div class="panel">
+      <h2>Server Bots</h2>
+      <table class="info-table" id="bots-table">
+        <thead><tr><th>Name</th><th>Interval</th><th>Blocks</th><th>Earned</th></tr></thead>
+        <tbody id="bots-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ── Right column ─────────────────────────────────────────────────── -->
+  <div id="admin-right">
+
+    <!-- All balances -->
+    <div class="panel">
+      <h2>All Balances</h2>
+      <table class="info-table" id="balances-table">
+        <thead><tr><th>Address</th><th>Balance</th><th>Blocks</th><th>Earned</th></tr></thead>
+        <tbody id="balances-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Mempool -->
+    <div class="panel">
+      <h2>Mempool <span id="mempool-count" style="font-weight:400;color:var(--muted)"></span></h2>
+      <table class="info-table" id="mempool-table">
+        <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
+        <tbody id="mempool-body">
+          <tr><td colspan="3" style="color:var(--muted)">Empty</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div><!-- /admin-layout -->
+
+<script src="admin.js"></script>
+</body>
+</html>

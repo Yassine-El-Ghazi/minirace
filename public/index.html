@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MineRace – Blockchain Explorer</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- elliptic for client-side ECDSA (local bundle, no CDN dependency) -->
+  <script src="/elliptic.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>Mine<span>Race</span></h1>
+  <div id="chain-status" class="valid">Chain: Valid</div>
+  <a href="/admin.html" class="admin-link">Admin</a>
+</header>
+
+<main>
+  <!-- ── Left sidebar ──────────────────────────────────────────────── -->
+  <div id="sidebar">
+
+    <!-- Wallet -->
+    <div class="panel" id="panel-wallet">
+      <h2>Wallet</h2>
+      <button class="btn btn-primary" id="btn-new-wallet">New Wallet</button>
+      <div style="margin: 8px 0; font-size:0.8rem; color:var(--muted)">Select wallet:</div>
+      <select id="wallet-select"><option value="">– none –</option></select>
+      <div class="address-display" id="wallet-address">No wallet selected</div>
+      <div class="balance-display" id="wallet-balance">– <span>coins</span></div>
+
+      <!-- All-wallets table -->
+      <div style="overflow-x:auto;margin-top:10px">
+        <table id="wallet-table">
+          <thead>
+            <tr>
+              <th>Address</th>
+              <th>Balance</th>
+              <th>Blocks</th>
+              <th>Earned</th>
+            </tr>
+          </thead>
+          <tbody id="wallet-table-body">
+            <tr><td colspan="4" style="color:var(--muted);font-size:0.75rem">No wallets yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Send transaction -->
+    <div class="panel" id="panel-tx">
+      <h2>Send Transaction</h2>
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:4px">Recipient address:</div>
+      <select id="tx-to-select"><option value="">– select –</option></select>
+      <input type="text" id="tx-to-custom" placeholder="…or paste address" />
+      <input type="number" id="tx-amount" placeholder="Amount" min="1" step="1" />
+      <button class="btn btn-green" id="btn-send-tx">Sign & Send</button>
+      <div id="tx-msg"></div>
+    </div>
+
+    <!-- Mining -->
+    <div class="panel" id="panel-mine">
+      <h2>Mine a Block</h2>
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:4px">Worker script path:</div>
+      <input type="text" id="worker-script" value="miner-worker.js" placeholder="miner-worker.js" />
+      <div id="nonce-display">–</div>
+      <div id="hash-display"></div>
+      <button class="btn btn-primary" id="btn-mine">Start Mining</button>
+      <button class="btn btn-secondary" id="btn-stop-mine" style="margin-top:6px;display:none">Stop</button>
+      <div id="mine-msg"></div>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="panel" id="panel-chat">
+      <h2>AI Agent</h2>
+      <div id="chat-log"></div>
+      <input type="text" id="chat-input" placeholder="Ask about the chain…" />
+      <button class="btn btn-secondary" id="btn-chat">Ask</button>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ── Explorer ───────────────────────────────────────────────────── -->
+  <div id="explorer-area">
+    <div id="chain-canvas-wrap">
+      <canvas id="chain-canvas"></canvas>
+    </div>
+    <div id="legend"></div>
+
+    <!-- Leaderboard -->
+    <div class="panel" id="leaderboard">
+      <h2>Leaderboard</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Miner</th>
+            <th>Blocks</th>
+            <th>Earnings (coins)</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Block detail popup -->
+<div id="overlay"></div>
+<div id="block-detail">
+  <button class="close-btn" id="close-block-detail">✕</button>
+  <h3>Block Detail</h3>
+  <div id="block-detail-content"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

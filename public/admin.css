@@ -1,0 +1,83 @@
+/* ── Admin layout ──────────────────────────────────────────────────────────── */
+#admin-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  align-items: start;
+}
+
+#admin-left, #admin-right {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 0;
+}
+
+/* ── Config controls ───────────────────────────────────────────────────────── */
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-row label {
+  font-size: 0.85rem;
+  color: var(--text);
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.config-row input {
+  width: 90px;
+  margin: 0;
+}
+
+.config-row .btn {
+  width: auto;
+  padding: 6px 16px;
+}
+
+.cfg-msg {
+  font-size: 0.75rem;
+  color: var(--green);
+  min-height: 1.2em;
+  margin: 4px 0 0 118px;
+}
+.cfg-msg.err { color: var(--red); }
+
+/* ── Info tables ───────────────────────────────────────────────────────────── */
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.info-table th {
+  text-align: left;
+  padding: 5px 8px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: .05em;
+}
+
+.info-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.info-table td:first-child { color: var(--muted); }
+
+/* Alternating row shade */
+.info-table tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,.02);
+}
+
+/* ── Refresh indicator ─────────────────────────────────────────────────────── */
+#server-status { margin-left: auto; margin-right: 8px; }

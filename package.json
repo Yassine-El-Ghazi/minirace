@@ -1,0 +1,18 @@
+{
+  "name": "minerace",
+  "version": "1.0.0",
+  "description": "Balance-based blockchain with PoW mining, wallets, REST API, and AI agent",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "bot": "node my-bot.js",
+    "build:client": "esbuild node_modules/elliptic/lib/elliptic.js --bundle --global-name=elliptic --outfile=public/elliptic.min.js --minify",
+    "build:worker": "esbuild miner-worker-src.js --bundle --outfile=public/miner-worker.js --minify",
+    "build": "npm run build:client && npm run build:worker"
+  },
+  "dependencies": {
+    "elliptic": "^6.5.4",
+    "express": "^4.18.2",
+    "hash-wasm": "^4.12.0"
+  }
+}

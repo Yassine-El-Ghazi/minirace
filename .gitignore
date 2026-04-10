@@ -1,0 +1,5 @@
+node_modules/
+data/blocks/
+my-bot-wallet.json
+.env
+*.log
