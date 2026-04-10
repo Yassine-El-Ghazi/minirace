@@ -37,6 +37,23 @@
         <button class="btn btn-primary" id="btn-reward">Apply</button>
       </div>
       <div id="msg-reward" class="cfg-msg"></div>
+
+      <div class="config-row" style="margin-top:10px">
+        <label>Target (min)</label>
+        <input type="number" id="cfg-target" min="0.1" step="any" />
+        <button class="btn btn-primary" id="btn-target">Apply</button>
+      </div>
+      <div id="msg-target" class="cfg-msg"></div>
+
+      <div class="config-row" style="margin-top:10px">
+        <label>Auto-Adjust</label>
+        <select id="cfg-daa" style="width:90px;margin:0">
+          <option value="1">Enabled</option>
+          <option value="0">Disabled</option>
+        </select>
+        <button class="btn btn-primary" id="btn-daa">Apply</button>
+      </div>
+      <div id="msg-daa" class="cfg-msg"></div>
     </div>
 
     <!-- Chain overview -->
@@ -47,6 +64,8 @@
           <tr><td>Height</td><td id="s-height">–</td></tr>
           <tr><td>Latest hash</td><td id="s-hash" style="font-family:monospace;font-size:0.72rem;word-break:break-all">–</td></tr>
           <tr><td>Mempool</td><td id="s-mempool">–</td></tr>
+          <tr><td>Avg block time</td><td id="s-avg-time">–</td></tr>
+          <tr><td>Target</td><td id="s-target-time">–</td></tr>
         </tbody>
       </table>
     </div>

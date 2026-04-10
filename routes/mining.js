@@ -44,18 +44,39 @@ module.exports = (blockchain) => {
     res.json({ miningReward: config.MINING_REWARD });
   });
 
+  // POST /api/target-time  – change target block time at runtime (minutes)
+  router.post('/target-time', adminAuth, (req, res) => {
+    const mins = Number(req.body.minutes);
+    if (isNaN(mins) || mins <= 0) {
+      return res.status(400).json({ error: 'minutes must be a positive number' });
+    }
+    config.TARGET_BLOCK_TIME = Math.round(mins * 60 * 1000);
+    res.json({ targetBlockTime: config.TARGET_BLOCK_TIME, minutes: mins });
+  });
+
+  // POST /api/daa-enabled  – toggle DAA on/off
+  router.post('/daa-enabled', adminAuth, (req, res) => {
+    config.DAA_ENABLED = !!req.body.enabled;
+    res.json({ daaEnabled: config.DAA_ENABLED });
+  });
+
   // GET /api/admin/status  – full server snapshot for the admin panel
   router.get('/admin/status', adminAuth, (req, res) => {
     const stats = blockchain.getStats();
+    const avgMs = blockchain.getAvgBlockTime();
     res.json({
       config: {
-        difficulty:    config.DIFFICULTY,
-        miningReward:  config.MINING_REWARD,
-        bots:          config.BOTS.map((b) => ({ name: b.name, interval: b.interval })),
+        difficulty:       config.DIFFICULTY,
+        miningReward:     config.MINING_REWARD,
+        bots:             config.BOTS.map((b) => ({ name: b.name, interval: b.interval })),
+        targetBlockTime:  config.TARGET_BLOCK_TIME,
+        adjustmentWindow: config.ADJUSTMENT_WINDOW,
+        daaEnabled:       config.DAA_ENABLED,
       },
       chain: {
-        height:     blockchain.chain.length,
-        latestHash: blockchain.getLatestBlock().hash,
+        height:          blockchain.chain.length,
+        latestHash:      blockchain.getLatestBlock().hash,
+        avgBlockTimeMs:  avgMs,
       },
       balances: blockchain.balances,
       stats,

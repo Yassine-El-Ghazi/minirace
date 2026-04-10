@@ -189,7 +189,47 @@ class Blockchain {
     const confirmedSigs = new Set(txs.map((tx) => tx.signature));
     this.mempool = this.mempool.filter((tx) => !confirmedSigs.has(tx.signature));
 
+    // Dynamic difficulty adjustment
+    this._checkDifficultyAdjustment();
+
     return { success: true, block };
+  }
+
+  _checkDifficultyAdjustment() {
+    if (!config.DAA_ENABLED) return;
+    const height = this.chain.length - 1; // current tip index
+    if (height < 2) return;
+    if (height % config.ADJUSTMENT_INTERVAL !== 0) return;
+
+    const windowSize = Math.min(config.ADJUSTMENT_WINDOW, height);
+    const slice = this.chain.slice(-(windowSize + 1));
+    const elapsed = slice[slice.length - 1].timestamp - slice[0].timestamp;
+    const avgMs = elapsed / windowSize;
+    const target = config.TARGET_BLOCK_TIME;
+    const ratio = avgMs / target;
+
+    const oldDiff = config.DIFFICULTY;
+    let newDiff = oldDiff;
+
+    if (ratio < 0.5)       newDiff = Math.min(oldDiff + 1, 20);  // blocks too fast
+    else if (ratio > 2.0)  newDiff = Math.max(oldDiff - 1, 1);   // blocks too slow
+
+    if (newDiff !== oldDiff) {
+      config.DIFFICULTY = newDiff;
+      const dir = newDiff > oldDiff ? '↑' : '↓';
+      console.log(
+        `[DAA] Block #${height}: avg ${(avgMs / 1000).toFixed(1)}s ` +
+        `(target ${(target / 1000).toFixed(0)}s) → difficulty ${oldDiff} ${dir} ${newDiff}`
+      );
+    }
+  }
+
+  getAvgBlockTime(window = config.ADJUSTMENT_WINDOW) {
+    const chain = this.chain;
+    if (chain.length < 2) return null;
+    const w = Math.min(window, chain.length - 1);
+    const slice = chain.slice(-(w + 1));
+    return (slice[slice.length - 1].timestamp - slice[0].timestamp) / w;
   }
 
   isChainValid() {

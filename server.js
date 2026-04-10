@@ -7,6 +7,7 @@ const miningRoutes = require('./routes/mining');
 const txRoutes = require('./routes/transactions');
 const chatRoutes = require('./routes/chat');
 const { startBots } = require('./bots/botMiner');
+const { startTelegramBot } = require('./bots/telegramBot');
 const adminAuth = require('./middleware/auth');
 
 const app = express();
@@ -30,6 +31,7 @@ app.use('/api', txRoutes(blockchain));
 app.use('/api', chatRoutes(blockchain));
 
 startBots(blockchain);
+startTelegramBot(blockchain);
 
 app.listen(config.PORT, () => {
   console.log(`MineRace server running on http://localhost:${config.PORT}`);
