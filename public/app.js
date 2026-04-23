@@ -1,14 +1,6 @@
-/* ── app.js – MineRace frontend ────────────────────────────────────────────── */
+/* ── app.js – MineRace read-only dashboard ─────────────────────────────────── */
 
-// ── Elliptic setup ────────────────────────────────────────────────────────────
-const EC = elliptic.ec;
-const ec = new EC('secp256k1');
-
-// ── State ─────────────────────────────────────────────────────────────────────
-let wallets = JSON.parse(localStorage.getItem('minerace_wallets') || '[]');
-let activeWallet = null;
 let chain = [];
-let minerWorker = null;
 let lastKnownLength = 0;
 const newBlockIndices = new Set();
 
@@ -31,13 +23,10 @@ function getMinerColour(miner) {
   return colourCache[miner];
 }
 
-// ── SHA-256 (SubtleCrypto) ────────────────────────────────────────────────────
-async function sha256(data) {
-  const encoded = new TextEncoder().encode(data);
-  const buf = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+function shortAddr(addr) {
+  if (!addr) return '';
+  if (addr === 'MINING_REWARD') return 'MINING_REWARD';
+  return addr.substring(0, 12) + '…';
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
@@ -47,312 +36,13 @@ async function apiGet(path) {
   return res.json();
 }
 
-async function apiPost(path, body) {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return res.json();
-}
-
-// ── Wallet management ─────────────────────────────────────────────────────────
-function saveWallets() {
-  localStorage.setItem('minerace_wallets', JSON.stringify(wallets));
-}
-
-function populateWalletSelect() {
-  const sel = document.getElementById('wallet-select');
-  sel.innerHTML = '<option value="">– none –</option>';
-  wallets.forEach((w, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = w.address.substring(0, 20) + '…';
-    sel.appendChild(opt);
-  });
-}
-
-function setActiveWallet(idx) {
-  activeWallet = wallets[idx] || null;
-  const addrEl = document.getElementById('wallet-address');
-  const balEl  = document.getElementById('wallet-balance');
-  if (!activeWallet) {
-    addrEl.textContent = 'No wallet selected';
-    balEl.innerHTML = '– <span>coins</span>';
-    return;
-  }
-  addrEl.textContent = activeWallet.address;
-  refreshBalance();
-}
-
-async function refreshBalance() {
-  if (!activeWallet) return;
-  try {
-    const data = await apiGet(`/api/balance/${activeWallet.address}`);
-    document.getElementById('wallet-balance').innerHTML =
-      `${data.balance} <span>coins</span>`;
-  } catch {
-    document.getElementById('wallet-balance').innerHTML = '? <span>coins</span>';
-  }
-}
-
-document.getElementById('btn-new-wallet').addEventListener('click', () => {
-  const keyPair = ec.genKeyPair();
-  const wallet = {
-    privateKey: keyPair.getPrivate('hex'),
-    address: keyPair.getPublic('hex'),
-  };
-  wallets.push(wallet);
-  saveWallets();
-  populateWalletSelect();
-  const sel = document.getElementById('wallet-select');
-  sel.value = wallets.length - 1;
-  setActiveWallet(wallets.length - 1);
-  refreshWalletTable();
-});
-
-document.getElementById('wallet-select').addEventListener('change', (e) => {
-  setActiveWallet(parseInt(e.target.value, 10));
-  refreshWalletTable();
-});
-
-// ── Wallet table ──────────────────────────────────────────────────────────────
-async function refreshWalletTable() {
-  const tbody = document.getElementById('wallet-table-body');
-  if (wallets.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);font-size:0.75rem">No wallets yet</td></tr>';
-    return;
-  }
-  try {
-    const [stats, ...balResults] = await Promise.all([
-      apiGet('/api/stats'),
-      ...wallets.map((w) => apiGet(`/api/balance/${w.address}`)),
-    ]);
-    tbody.innerHTML = wallets.map((w, i) => {
-      const s       = stats[w.address];
-      const balance = balResults[i].balance;
-      const blocks  = s ? s.blocks   : 0;
-      const earned  = s ? s.earnings : 0;
-      const isActive = activeWallet && activeWallet.address === w.address;
-      const short   = w.address.substring(0, 10) + '…';
-      return `<tr class="${isActive ? 'wallet-row-active' : ''}">
-        <td title="${w.address}" onclick="navigator.clipboard.writeText('${w.address}')">${short}</td>
-        <td>${balance}</td>
-        <td>${blocks}</td>
-        <td>${earned}</td>
-      </tr>`;
-    }).join('');
-  } catch { /* ignore */ }
-}
-
-
-// ── Transaction ───────────────────────────────────────────────────────────────
-document.getElementById('btn-send-tx').addEventListener('click', async () => {
-  const msgEl = document.getElementById('tx-msg');
-  msgEl.textContent = '';
-  if (!activeWallet) {
-    msgEl.className = 'msg-err';
-    msgEl.textContent = 'Select a wallet first.';
-    return;
-  }
-  const customTo = document.getElementById('tx-to-custom').value.trim();
-  const selectTo = document.getElementById('tx-to-select').value;
-  const to = customTo || selectTo;
-  const amount = parseInt(document.getElementById('tx-amount').value, 10);
-
-  if (!to || isNaN(amount) || amount <= 0) {
-    msgEl.className = 'msg-err';
-    msgEl.textContent = 'Please fill in recipient and a positive amount.';
-    return;
-  }
-
-  const hash = await sha256(activeWallet.address + to + amount);
-  const keyPair = ec.keyFromPrivate(activeWallet.privateKey, 'hex');
-  const signature = keyPair.sign(hash, 'hex').toDER('hex');
-
-  const result = await apiPost('/api/transaction', {
-    from: activeWallet.address,
-    to,
-    amount,
-    signature,
-  });
-
-  if (result.message) {
-    msgEl.className = 'msg-ok';
-    msgEl.textContent = result.message;
-  } else {
-    msgEl.className = 'msg-err';
-    msgEl.textContent = result.error || 'Unknown error';
-  }
-});
-
-// ── Mining ────────────────────────────────────────────────────────────────────
-// keepMining = true while the user wants to mine continuously (auto-retry on stale)
-let keepMining = false;
-
-async function startMining() {
-  const msgEl = document.getElementById('mine-msg');
-
-  if (!activeWallet) {
-    msgEl.className = 'msg-err';
-    msgEl.textContent = 'Select a wallet first.';
-    keepMining = false;
-    stopMiner();
-    return;
-  }
-
-  let challenge;
-  try {
-    challenge = await apiGet('/api/challenge');
-  } catch {
-    msgEl.className = 'msg-err';
-    msgEl.textContent = 'Failed to fetch challenge.';
-    keepMining = false;
-    stopMiner();
-    return;
-  }
-
-  // Guard: user may have clicked Stop while we were fetching the challenge
-  if (!keepMining) return;
-
-  const rewardTx = {
-    from: 'MINING_REWARD',
-    to: activeWallet.address,
-    amount: challenge.miningReward,
-    signature: null,
-  };
-  const transactions = [...challenge.pendingTransactions, rewardTx];
-  const timestamp = Date.now();
-
-  document.getElementById('nonce-display').textContent = '0';
-  msgEl.className = '';
-  msgEl.textContent = `Mining block #${challenge.index}…`;
-
-  const workerScript = document.getElementById('worker-script').value.trim() || 'miner-worker.js';
-  minerWorker = new Worker(workerScript);
-  minerWorker.postMessage({
-    index: challenge.index,
-    timestamp,
-    previousHash: challenge.previousHash,
-    transactions,
-    difficulty: challenge.difficulty,
-  });
-
-  minerWorker.onerror = (e) => {
-    stopMiner();
-    keepMining = false;
-    msgEl.className = 'msg-err';
-    msgEl.textContent = 'Mining error. Please try again.';
-    console.error('Worker error:', e.message);
-  };
-
-  minerWorker.onmessage = async (e) => {
-    if (e.data.type === 'progress') {
-      document.getElementById('nonce-display').textContent = e.data.nonce.toLocaleString();
-      document.getElementById('hash-display').textContent = e.data.hash;
-    } else if (e.data.type === 'found') {
-      const { nonce, hash } = e.data;
-      document.getElementById('nonce-display').textContent = nonce.toLocaleString();
-      document.getElementById('hash-display').textContent = hash;
-
-      // Terminate this worker before submitting so a new one can be spawned
-      if (minerWorker) { minerWorker.terminate(); minerWorker = null; }
-
-      const result = await apiPost('/api/submitBlock', {
-        index: challenge.index,
-        timestamp,
-        previousHash: challenge.previousHash,
-        transactions,
-        nonce,
-        hash,
-      });
-
-      if (result.block) {
-        msgEl.className = 'msg-ok';
-        msgEl.textContent = `Block #${challenge.index} accepted! Reward: ${challenge.miningReward} coins.`;
-        refreshChain();
-        refreshBalance();
-        // Immediately start mining the next block
-        if (keepMining) startMining();
-      } else if (keepMining && result.error && result.error.includes('Stale')) {
-        // Chain moved on while we were hashing — silently retry with fresh challenge
-        msgEl.className = '';
-        msgEl.textContent = `Stale (#${challenge.index}), retrying…`;
-        startMining();
-      } else {
-        msgEl.className = 'msg-err';
-        msgEl.textContent = `Rejected: ${result.error}`;
-        keepMining = false;
-        stopMiner();
-      }
-    }
-  };
-}
-
-document.getElementById('btn-mine').addEventListener('click', () => {
-  if (minerWorker) return;
-  keepMining = true;
-  document.getElementById('btn-mine').style.display = 'none';
-  document.getElementById('btn-stop-mine').style.display = '';
-  startMining();
-});
-
-document.getElementById('btn-stop-mine').addEventListener('click', () => {
-  keepMining = false;
-  stopMiner();
-  document.getElementById('mine-msg').textContent = 'Mining stopped.';
-  document.getElementById('mine-msg').className = 'msg-err';
-});
-
-function stopMiner() {
-  if (minerWorker) {
-    minerWorker.terminate();
-    minerWorker = null;
-  }
-  document.getElementById('btn-mine').style.display = '';
-  document.getElementById('btn-stop-mine').style.display = 'none';
-}
-
-// ── AI Chat ───────────────────────────────────────────────────────────────────
-document.getElementById('btn-chat').addEventListener('click', sendChat);
-document.getElementById('chat-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendChat();
-});
-
-function appendChatMsg(text, cls) {
-  const log = document.getElementById('chat-log');
-  const div = document.createElement('div');
-  div.className = `chat-msg ${cls}`;
-  div.textContent = text;
-  log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
-}
-
-async function sendChat() {
-  const input = document.getElementById('chat-input');
-  const message = input.value.trim();
-  if (!message) return;
-  input.value = '';
-  appendChatMsg(`You: ${message}`, 'user');
-  try {
-    const data = await apiPost('/api/chat', { message });
-    if (data.reply) {
-      appendChatMsg(`AI: ${data.reply}`, 'ai');
-    } else {
-      appendChatMsg(`Error: ${data.error}`, 'error');
-    }
-  } catch {
-    appendChatMsg('AI agent unavailable.', 'error');
-  }
-}
-
 // ── Canvas Explorer ───────────────────────────────────────────────────────────
 const BLOCK_W   = 130;
 const BLOCK_H   = 70;
 const BLOCK_GAP = 30;
 const CANVAS_PAD = 20;
+const MAX_VISIBLE_BLOCKS = 30;
 
-// Cross-browser rounded rectangle (ctx.roundRect added in Chrome 99 / Firefox 112)
 function drawRoundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -367,14 +57,17 @@ function drawRoundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-const MAX_VISIBLE_BLOCKS = 30;
+function getMinerForBlock(block) {
+  const reward = block.transactions.find((tx) => tx.from === 'MINING_REWARD');
+  if (reward) return reward.to;
+  return 'genesis';
+}
 
 function drawChain(blocks) {
   const wrap   = document.getElementById('chain-canvas-wrap');
   const canvas = document.getElementById('chain-canvas');
   const ctx    = canvas.getContext('2d');
 
-  // Show only the most recent MAX_VISIBLE_BLOCKS to keep canvas size manageable
   const visible = blocks.slice(-MAX_VISIBLE_BLOCKS);
 
   const totalW = visible.length > 0
@@ -391,7 +84,6 @@ function drawChain(blocks) {
     const x = CANVAS_PAD + i * (BLOCK_W + BLOCK_GAP);
     const y = CANVAS_PAD + 10;
 
-    // Arrow connecting to previous block
     if (i > 0) {
       const ax = x - BLOCK_GAP;
       const ay = y + BLOCK_H / 2;
@@ -413,18 +105,15 @@ function drawChain(blocks) {
     const colour = getMinerColour(miner);
     const isNew  = newBlockIndices.has(block.index);
 
-    // Glow animation for newly added blocks
     if (isNew) {
       ctx.shadowColor = colour;
       ctx.shadowBlur  = 18;
     }
 
-    // Block fill
     ctx.fillStyle = colour + '33';
     drawRoundRect(ctx, x, y, BLOCK_W, BLOCK_H, 6);
     ctx.fill();
 
-    // Block border (brighter for new blocks)
     ctx.strokeStyle = isNew ? colour : colour + 'aa';
     ctx.lineWidth   = isNew ? 3 : 2;
     drawRoundRect(ctx, x, y, BLOCK_W, BLOCK_H, 6);
@@ -432,7 +121,6 @@ function drawChain(blocks) {
 
     ctx.shadowBlur = 0;
 
-    // Block text
     ctx.textAlign = 'center';
     ctx.fillStyle = '#c9d1d9';
     ctx.font = 'bold 13px monospace';
@@ -444,18 +132,12 @@ function drawChain(blocks) {
 
     ctx.fillStyle = colour;
     ctx.font = '10px sans-serif';
-    ctx.fillText(miner.substring(0, 12), x + BLOCK_W / 2, y + 52);
+    ctx.fillText(shortAddr(miner), x + BLOCK_W / 2, y + 52);
 
     ctx.fillStyle = '#8b949e';
     ctx.font = '9px sans-serif';
     ctx.fillText(`${block.transactions.length} tx(s)`, x + BLOCK_W / 2, y + 64);
   });
-}
-
-function getMinerForBlock(block) {
-  const reward = block.transactions.find((tx) => tx.from === 'MINING_REWARD');
-  if (reward) return reward.to;
-  return 'genesis';
 }
 
 // Click canvas to expand block detail
@@ -481,9 +163,9 @@ function showBlockDetail(block) {
   const txRows = block.transactions
     .map(
       (tx) =>
-        `<tr><td>${tx.from === 'MINING_REWARD' ? 'MINING_REWARD' : tx.from.substring(0, 12) + '…'}</td>
+        `<tr><td>${shortAddr(tx.from)}</td>
          <td>→</td>
-         <td>${tx.to.substring(0, 12)}…</td>
+         <td>${shortAddr(tx.to)}</td>
          <td>${tx.amount}</td></tr>`
     )
     .join('');
@@ -492,10 +174,10 @@ function showBlockDetail(block) {
     <table>
       <tr><td>Index</td><td>${block.index}</td></tr>
       <tr><td>Timestamp</td><td>${new Date(block.timestamp).toLocaleString()}</td></tr>
-      <tr><td>Miner</td><td>${miner}</td></tr>
+      <tr><td>Miner</td><td>${shortAddr(miner)}</td></tr>
       <tr><td>Nonce</td><td>${block.nonce}</td></tr>
-      <tr><td>Hash</td><td>${block.hash}</td></tr>
-      <tr><td>PrevHash</td><td>${block.previousHash}</td></tr>
+      <tr><td>Hash</td><td style="word-break:break-all">${block.hash}</td></tr>
+      <tr><td>PrevHash</td><td style="word-break:break-all">${block.previousHash}</td></tr>
     </table>
     <br/>
     <strong style="font-size:0.8rem;color:var(--muted)">Transactions:</strong>
@@ -524,7 +206,7 @@ function buildLegend(blocks) {
   miners.forEach((m) => {
     const span = document.createElement('span');
     const dot = `<span class="legend-dot" style="background:${getMinerColour(m)}"></span>`;
-    span.innerHTML = `${dot}${m}`;
+    span.innerHTML = `${dot}${shortAddr(m)}`;
     legend.appendChild(span);
   });
 }
@@ -539,36 +221,91 @@ async function refreshLeaderboard() {
       .map(([miner, s]) => {
         const colour = getMinerColour(miner);
         return `<tr>
-          <td><span class="legend-dot" style="background:${colour}"></span>${miner.substring(0, 20)}</td>
+          <td><span class="legend-dot" style="background:${colour}"></span>${shortAddr(miner)}</td>
           <td>${s.blocks}</td>
           <td>${s.earnings}</td>
         </tr>`;
       });
-    tbody.innerHTML = rows.join('') || '<tr><td colspan="3">No data yet</td></tr>';
+    tbody.innerHTML = rows.join('') || '<tr><td colspan="3" class="empty-msg">No data yet</td></tr>';
   } catch { /* ignore */ }
 }
 
-// ── Recipient dropdown (populated from chain history) ─────────────────────────
-function populateRecipients(blocks) {
+// ── Mempool ───────────────────────────────────────────────────────────────────
+async function refreshMempool() {
+  try {
+    const mempool = await apiGet('/api/mempool');
+    const countEl = document.getElementById('mempool-count');
+    const listEl  = document.getElementById('mempool-list');
+    countEl.textContent = mempool.length;
+
+    if (mempool.length === 0) {
+      listEl.innerHTML = '<div class="empty-msg">No pending transactions</div>';
+      return;
+    }
+    listEl.innerHTML = mempool.map((tx) => `
+      <div class="mempool-row">
+        <div><span class="mempool-addr">${shortAddr(tx.from)}</span> → <span class="mempool-addr">${shortAddr(tx.to)}</span></div>
+        <div class="mempool-amount">${tx.amount} coins</div>
+      </div>
+    `).join('');
+  } catch { /* ignore */ }
+}
+
+// ── Known addresses ───────────────────────────────────────────────────────────
+async function refreshAddresses() {
+  const tbody = document.getElementById('address-table-body');
   const addresses = new Set();
-  blocks.forEach((b) => {
+  chain.forEach((b) => {
     b.transactions.forEach((tx) => {
       if (tx.from !== 'MINING_REWARD') addresses.add(tx.from);
       addresses.add(tx.to);
     });
   });
-  wallets.forEach((w) => addresses.add(w.address));
 
-  const sel = document.getElementById('tx-to-select');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">– select –</option>';
-  addresses.forEach((addr) => {
-    const opt = document.createElement('option');
-    opt.value = addr;
-    opt.textContent = addr.substring(0, 20) + '…';
-    sel.appendChild(opt);
-  });
-  if (current) sel.value = current;
+  if (addresses.size === 0) {
+    tbody.innerHTML = '<tr><td colspan="2" class="empty-msg">No addresses yet</td></tr>';
+    return;
+  }
+
+  try {
+    const list = Array.from(addresses);
+    const balances = await Promise.all(
+      list.map((addr) => apiGet(`/api/balance/${addr}`).catch(() => ({ balance: '?' })))
+    );
+    const rows = list
+      .map((addr, i) => ({ addr, balance: balances[i].balance }))
+      .sort((a, b) => (typeof b.balance === 'number' ? b.balance : 0) - (typeof a.balance === 'number' ? a.balance : 0))
+      .map(({ addr, balance }) => {
+        const colour = getMinerColour(addr);
+        const display = addr.length <= 20
+          ? addr
+          : `<span title="${addr}" onclick="navigator.clipboard.writeText('${addr}')">${shortAddr(addr)}</span>`;
+        return `<tr>
+          <td><span class="legend-dot" style="background:${colour}"></span>${display}</td>
+          <td>${balance}</td>
+        </tr>`;
+      });
+    tbody.innerHTML = rows.join('');
+  } catch { /* ignore */ }
+}
+
+// ── Chain info panel ──────────────────────────────────────────────────────────
+async function refreshInfo() {
+  try {
+    const diff = await apiGet('/api/difficulty');
+    document.getElementById('info-height').textContent     = chain.length;
+    document.getElementById('info-difficulty').textContent = diff.difficulty;
+    document.getElementById('info-reward').textContent     = diff.miningReward;
+
+    if (chain.length >= 2) {
+      const recent = chain.slice(-Math.min(20, chain.length));
+      const elapsed = recent[recent.length - 1].timestamp - recent[0].timestamp;
+      const avgSec = (elapsed / (recent.length - 1) / 1000).toFixed(1);
+      document.getElementById('info-avgtime').textContent = `${avgSec}s`;
+    } else {
+      document.getElementById('info-avgtime').textContent = '–';
+    }
+  } catch { /* ignore */ }
 }
 
 // ── Chain validity indicator ──────────────────────────────────────────────────
@@ -595,8 +332,6 @@ async function refreshChain() {
   try {
     const newChain = await apiGet('/api/chain');
 
-    // Detect new blocks and mark them for animation.
-    // On the very first load, just set the baseline — don't glow all existing blocks.
     if (lastKnownLength === 0) {
       lastKnownLength = newChain.length;
     } else if (newChain.length > lastKnownLength) {
@@ -604,10 +339,8 @@ async function refreshChain() {
         newBlockIndices.add(i);
       }
       lastKnownLength = newChain.length;
-      // Scroll canvas to show the latest block
       const wrap = document.getElementById('chain-canvas-wrap');
       setTimeout(() => { wrap.scrollLeft = wrap.scrollWidth; }, 50);
-      // Clear glow after one extra refresh cycle
       setTimeout(() => {
         newBlockIndices.clear();
         drawChain(chain);
@@ -618,16 +351,15 @@ async function refreshChain() {
     drawChain(chain);
     buildLegend(chain);
     checkChainValidity();
-    populateRecipients(chain);
     refreshLeaderboard();
-    refreshWalletTable();
-    if (activeWallet) refreshBalance();
+    refreshMempool();
+    refreshAddresses();
+    refreshInfo();
   } catch (err) {
     console.error('Failed to refresh chain:', err);
   }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-populateWalletSelect();
 refreshChain();
 setInterval(refreshChain, 5000);
